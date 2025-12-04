@@ -1469,7 +1469,7 @@ function nextCustomer() {
             <div style="display: flex; flex-direction: column; width: 100%;">
               <div style="flex-grow: 1;">
                 <el-input v-model="topLeftText" type="textarea" :rows="2"
-                  placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额，>内容> 表示内容靠右展示，>内容> 表示内容靠右展示">
+                  placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额，>内容> 表示内容靠右展示">
                 </el-input>
               </div>
             </div>
