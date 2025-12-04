@@ -6,8 +6,14 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { bitable } from '@lark-base-open/js-sdk';
 import { Setting } from '@element-plus/icons-vue';
 
+// --- 工具函数 ---
 
-
+/**
+ * 创建持久化引用
+ * @param {string} key - localStorage键名
+ * @param {*} defaultValue - 默认值
+ * @returns {Object} 响应式引用对象
+ */
 function createPersistentRef(key, defaultValue) {
   const storedValue = localStorage.getItem(key);
   let initialValue;
@@ -32,7 +38,7 @@ function createPersistentRef(key, defaultValue) {
 
   const dataRef = ref(initialValue);
 
-
+  // 监听数据变化并保存到localStorage
   watch(dataRef, (newValue) => {
     if (Array.isArray(newValue) || (typeof newValue === 'object' && newValue !== null)) {
       localStorage.setItem(key, JSON.stringify(newValue));
@@ -44,11 +50,15 @@ function createPersistentRef(key, defaultValue) {
   return dataRef;
 }
 
-
+/**
+ * 格式化单元格数据
+ * @param {*} cellValue - 单元格原始值
+ * @returns {string} 格式化后的字符串
+ */
 function formatCell(cellValue) {
   if (!cellValue) return '';
 
-
+  // 处理时间戳格式的日期
   if (typeof cellValue === 'number' && String(cellValue).length === 13) {
     const date = new Date(cellValue);
     if (!isNaN(date.getTime())) {
@@ -59,7 +69,7 @@ function formatCell(cellValue) {
     }
   }
 
-
+  // 处理数组类型
   if (Array.isArray(cellValue)) {
     return cellValue.map(item => {
       if (typeof item === 'object' && item !== null) {
@@ -69,20 +79,25 @@ function formatCell(cellValue) {
     }).join(', ');
   }
 
-
+  // 处理对象类型
   if (typeof cellValue === 'object' && cellValue !== null) {
     return cellValue.text || '';
   }
 
-
+  // 处理基本类型
   return String(cellValue);
 }
 
-
+/**
+ * 调度场算法实现表达式计算
+ * @param {string} expression - 数学表达式字符串
+ * @returns {number} 计算结果
+ */
 function shuntingYardEvaluate(expression) {
   const outputQueue = [];
   const operatorStack = [];
 
+  // 运算符优先级
   const precedence = {
     '+': 1,
     '-': 1,
@@ -90,6 +105,7 @@ function shuntingYardEvaluate(expression) {
     '/': 2
   };
 
+  // 运算符结合性
   const associativity = {
     '+': 'L',
     '-': 'L',
@@ -97,17 +113,21 @@ function shuntingYardEvaluate(expression) {
     '/': 'L'
   };
 
+  // 解析表达式中的数字和运算符
   const tokens = expression.match(/\d+\.?\d*|[+\-*/()]/g) || [];
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
 
+    // 数字直接入队
     if (/^\d+\.?\d*$/.test(token)) {
       outputQueue.push(parseFloat(token));
     }
+    // 左括号入栈
     else if (token === '(') {
       operatorStack.push(token);
     }
+    // 右括号，弹出运算符直到遇到左括号
     else if (token === ')') {
       while (operatorStack.length > 0 && operatorStack[operatorStack.length - 1] !== '(') {
         outputQueue.push(operatorStack.pop());
@@ -115,8 +135,9 @@ function shuntingYardEvaluate(expression) {
       if (operatorStack.length === 0) {
         throw new Error('括号不匹配');
       }
-      operatorStack.pop();
+      operatorStack.pop(); // 弹出左括号
     }
+    // 运算符处理
     else if (token in precedence) {
       while (
         operatorStack.length > 0 &&
@@ -133,6 +154,7 @@ function shuntingYardEvaluate(expression) {
     }
   }
 
+  // 弹出栈中剩余的运算符
   while (operatorStack.length > 0) {
     const op = operatorStack.pop();
     if (op === '(' || op === ')') {
@@ -141,6 +163,7 @@ function shuntingYardEvaluate(expression) {
     outputQueue.push(op);
   }
 
+  // 计算后缀表达式
   const stack = [];
   for (let i = 0; i < outputQueue.length; i++) {
     const token = outputQueue[i];
@@ -184,14 +207,21 @@ function shuntingYardEvaluate(expression) {
   return stack[0];
 }
 
-
+/**
+ * 根据格式配置格式化数字
+ * @param {number} value - 要格式化的数值
+ * @param {string} formatConfig - 格式配置（如"2"表示保留2位小数四舍五入，"2入"表示保留2位小数向上取整）
+ * @returns {string} 格式化后的数字字符串
+ */
 function formatNumberByConfig(value, formatConfig) {
   if (!formatConfig) return value;
 
   let decimalPlaces = 0;
-  let roundMode = 'round';
+  let roundMode = 'round'; // 默认四舍五入
 
+  // 解析格式配置
   if (formatConfig.match(/^\d+$/)) {
+    // 只有数字，表示保留小数位数，使用四舍五入
     decimalPlaces = parseInt(formatConfig, 10);
   } else if (formatConfig.match(/^(\d+)(入|舍)$/)) {
     const match = formatConfig.match(/^(\d+)(入|舍)$/);
@@ -204,6 +234,7 @@ function formatNumberByConfig(value, formatConfig) {
 
   switch (roundMode) {
     case '入':
+      // 向上取整
       if (value < 0) {
         result = Math.floor(value * multiplier) / multiplier;
       } else {
@@ -211,6 +242,7 @@ function formatNumberByConfig(value, formatConfig) {
       }
       break;
     case '舍':
+      // 向下取整
       if (value < 0) {
         result = Math.ceil(value * multiplier) / multiplier;
       } else {
@@ -218,37 +250,51 @@ function formatNumberByConfig(value, formatConfig) {
       }
       break;
     default:
+      // 四舍五入
       result = Math.round(value * multiplier) / multiplier;
   }
 
+  // 确保显示指定的小数位数
   return result.toFixed(decimalPlaces);
 }
 
-
+/**
+ * 将数字转换为中文大写金额格式
+ * @param {number} number - 要转换的数字
+ * @returns {string} 中文大写金额字符串
+ */
 function convertToChineseAmount(number) {
+  // 中文数字
   const chineseNumbers = ['零', '壹', '贰', '叁', '肆', '伍', '陆', '柒', '捌', '玖'];
 
+  // 中文单位
   const chineseUnits = ['', '拾', '佰', '仟'];
   const chineseBigUnits = ['', '万', '亿'];
 
+  // 处理负数
   const isNegative = number < 0;
   number = Math.abs(number);
 
+  // 保留两位小数
   const roundedNumber = Math.round(number * 100) / 100;
   const [integerPart, decimalPart = ''] = roundedNumber.toString().split('.');
 
+  // 处理整数部分
   let integerStr = integerPart;
   let result = '';
 
+  // 补齐到能被4整除的位数
   while (integerStr.length % 4 !== 0) {
     integerStr = '0' + integerStr;
   }
 
+  // 按4位一组处理
   const groups = [];
   for (let i = 0; i < integerStr.length; i += 4) {
     groups.push(integerStr.substring(i, i + 4));
   }
 
+  // 处理每一组
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i];
     let groupStr = '';
@@ -258,18 +304,22 @@ function convertToChineseAmount(number) {
       const digit = parseInt(group[j]);
 
       if (digit === 0) {
+        // 处理零的情况
         if (groupStr !== '' && !zeroFlag) {
           groupStr += '零';
           zeroFlag = true;
         }
       } else {
+        // 处理非零数字
         groupStr += chineseNumbers[digit] + chineseUnits[3 - j];
         zeroFlag = false;
       }
     }
 
+    // 去掉末尾的零
     groupStr = groupStr.replace(/零+$/, '');
 
+    // 添加大单位
     if (groupStr !== '') {
       groupStr += chineseBigUnits[groups.length - 1 - i];
     }
@@ -277,14 +327,18 @@ function convertToChineseAmount(number) {
     result += groupStr;
   }
 
+  // 处理连续的零
   result = result.replace(/零+/g, '零');
 
+  // 特殊情况：只有零
   if (result === '') {
     result = '零';
   }
 
+  // 添加元
   result += '元';
 
+  // 处理小数部分
   if (decimalPart) {
     const decimalDigits = decimalPart.padEnd(2, '0').substring(0, 2);
     const jiao = parseInt(decimalDigits[0]);
@@ -293,6 +347,7 @@ function convertToChineseAmount(number) {
     if (jiao > 0) {
       result += chineseNumbers[jiao] + '角';
     } else if (fen > 0) {
+      // 如果有分但没有角，需要加零
       if (jiao === 0) {
         result += '零';
       }
@@ -310,6 +365,7 @@ function convertToChineseAmount(number) {
     result += '整';
   }
 
+  // 处理负数
   if (isNegative) {
     result = '负' + result;
   }
@@ -317,27 +373,37 @@ function convertToChineseAmount(number) {
   return result;
 }
 
-
+/**
+ * 变量替换函数
+ * @param {string} text - 包含变量的文本
+ * @param {Object} customerData - 客户数据
+ * @param {Object} calculationResults - 计算结果
+ * @param {Array} allFields - 所有字段信息
+ * @param {Array} groupingFieldIds - 分组字段ID数组
+ * @returns {string} 替换变量后的文本
+ */
 function replaceVariables(text, customerData, calculationResults, allFields, groupingFieldIds) {
   try {
     if (!text || !customerData) return text;
 
+    // 处理\n和\t的重复语法
     let processedText = text
       .replace(/\\n\*(\d+)/g, (match, count) => '<br>'.repeat(parseInt(count)))
       .replace(/\\t\*(\d+)/g, (match, count) => '&nbsp;'.repeat(parseInt(count)))
       .replace(/\\n/g, '<br>')
       .replace(/\\t/g, '&nbsp;');
 
-
+    // 处理被@符号包裹的{{变量名}}引用，转换为中文大写金额格式
     processedText = processedText.replace(/@(\{\{[^}]+\}\})@/g, (match, variable) => {
+      // 先处理变量引用，获取实际值
       let value = variable;
 
-
+      // 处理带索引的计算结果引用
       value = value.replace(/\{\{\s*([^}\s\[\]]+)\s*\[\s*(\d+)\s*\]\s*\}\}/g, (match, varName, indexStr) => {
         const trimmedVarName = varName.trim();
         const index = parseInt(indexStr, 10);
 
-
+        // 检查计算结果是否存在且索引有效
         if (calculationResults &&
           calculationResults[trimmedVarName] &&
           calculationResults[trimmedVarName].values &&
@@ -348,17 +414,18 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
 
           const value = calculationResults[trimmedVarName].values[index];
           const formatConfig = calculationResults[trimmedVarName].formatConfig;
+          // 根据格式配置格式化结果
           return formatNumberByConfig(value, formatConfig);
         }
 
-        return match;
+        return match; // 未找到对应计算结果，保留原始文本
       });
 
-
+      // 处理简化形式的计算结果引用
       value = value.replace(/\{\{\s*([^}\s\[\]]+)\s*\}\}/g, (match, varName) => {
         const trimmedVarName = varName.trim();
 
-
+        // 检查是否存在计算结果且不为字段名
         if (calculationResults &&
           calculationResults[trimmedVarName] &&
           calculationResults[trimmedVarName].values &&
@@ -369,13 +436,14 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
 
           const value = calculationResults[trimmedVarName].values[0];
           const formatConfig = calculationResults[trimmedVarName].formatConfig;
+          // 根据格式配置格式化结果
           return formatNumberByConfig(value, formatConfig);
         }
 
-        return match;
+        return match; // 保留原始匹配，让下一个正则处理
       });
 
-
+      // 处理普通字段引用
       value = value.replace(/\{\{([^}]*)\}\}/g, (match, fieldName) => {
         const trimmedFieldName = fieldName.trim();
         const field = allFields.find(f => f.name === trimmedFieldName);
@@ -383,11 +451,13 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
 
         try {
           if (groupingFieldIds.length === 0) {
+            // 非分组模式，从第一条记录获取
             const record = customerData.records[0];
             if (record && typeof record[field.id] !== 'undefined') {
               return formatCell(record[field.id]);
             }
           } else {
+            // 分组模式，从分组信息获取
             const groupValue = customerData.groupingInfo.find(g => g.name === field.name);
             if (groupValue) {
               return groupValue.value;
@@ -399,7 +469,7 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
         return '';
       });
 
-
+      // 如果最终结果是数字，则转换为中文大写金额
       const numericResult = parseFloat(value);
       if (!isNaN(numericResult)) {
         return convertToChineseAmount(numericResult);
@@ -408,7 +478,7 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
       return value;
     });
 
-
+    // 处理被@符号包裹的数字，转换为中文大写金额格式
     processedText = processedText.replace(/@(\d+\.?\d*)@/g, (match, number) => {
       const num = parseFloat(number);
       if (!isNaN(num)) {
@@ -417,12 +487,12 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
       return match;
     });
 
-
+    // 处理带索引的计算结果引用
     processedText = processedText.replace(/\{\{\s*([^}\s\[\]]+)\s*\[\s*(\d+)\s*\]\s*\}\}/g, (match, varName, indexStr) => {
       const trimmedVarName = varName.trim();
       const index = parseInt(indexStr, 10);
 
-
+      // 检查计算结果是否存在且索引有效
       if (calculationResults &&
         calculationResults[trimmedVarName] &&
         calculationResults[trimmedVarName].values &&
@@ -433,18 +503,19 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
 
         const value = calculationResults[trimmedVarName].values[index];
         const formatConfig = calculationResults[trimmedVarName].formatConfig;
+        // 根据格式配置格式化结果
         const result = formatNumberByConfig(value, formatConfig);
         return result;
       }
 
-      return match;
+      return match; // 未找到对应计算结果，保留原始文本
     });
 
-
+    // 处理简化形式的计算结果引用
     processedText = processedText.replace(/\{\{\s*([^}\s\[\]]+)\s*\}\}/g, (match, varName) => {
       const trimmedVarName = varName.trim();
 
-
+      // 检查是否存在计算结果且不为字段名
       if (calculationResults &&
         calculationResults[trimmedVarName] &&
         calculationResults[trimmedVarName].values &&
@@ -455,14 +526,15 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
 
         const value = calculationResults[trimmedVarName].values[0];
         const formatConfig = calculationResults[trimmedVarName].formatConfig;
+        // 根据格式配置格式化结果
         const result = formatNumberByConfig(value, formatConfig);
         return result;
       }
 
-      return match;
+      return match; // 保留原始匹配，让下一个正则处理
     });
 
-
+    // 处理普通字段引用
     processedText = processedText.replace(/\{\{([^}]*)\}\}/g, (match, fieldName) => {
       const trimmedFieldName = fieldName.trim();
       const field = allFields.find(f => f.name === trimmedFieldName);
@@ -470,12 +542,14 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
 
       try {
         if (groupingFieldIds.length === 0) {
+          // 非分组模式，从第一条记录获取
           const record = customerData.records[0];
           if (record && typeof record[field.id] !== 'undefined') {
             const result = formatCell(record[field.id]);
             return result;
           }
         } else {
+          // 分组模式，从分组信息获取
           const groupValue = customerData.groupingInfo.find(g => g.name === field.name);
           if (groupValue) {
             const result = groupValue.value;
@@ -488,6 +562,21 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
       return '';
     });
 
+    const lines = processedText.split('<br>');
+    const newLines = lines.map(line => {
+      const rightParts = [];
+      const leftLine = line.replace(/>([^>]+?)>/g, (match, content) => {
+        rightParts.push(content);
+        return '';
+      });
+
+      if (rightParts.length > 0) {
+        return `<div style="display: flex; justify-content: space-between; align-items: center; width: 100%;"><span>${leftLine}</span><span>${rightParts.join('')}</span></div>`;
+      }
+      return line;
+    });
+    processedText = newLines.join('<br>');
+
     return processedText;
   } catch (error) {
     console.error('replaceVariables函数出错:', error);
@@ -495,58 +584,109 @@ function replaceVariables(text, customerData, calculationResults, allFields, gro
   }
 }
 
+// --- 状态管理 ---
 
-
+// 控制预览对话框显示状态
 const showInvoice = ref(false);
+// 控制打印设置对话框显示状态
 const showSettingsDialog = ref(false);
+// 控制全部打印对话框显示状态
 const showAllInvoiceDialog = ref(false);
+// 存储所有字段信息
 const allFields = ref([]);
 const invoiceDataByCustomer = ref([]);
 const currentCustomerIndex = ref(0);
 let lastRecordIdList = [];
 
-
+// --- 持久化状态 ---
+// 选择显示的字段ID数组
 const selectedFieldIds = createPersistentRef('selectedFieldIds', []);
+// 分组合并依据字段ID数组
 const groupingFieldIds = createPersistentRef('groupingFieldIds', []);
+// 存储列宽配置
+const columnWidths = createPersistentRef('columnWidths', '');
+// 左上角文本内容
 const topLeftText = createPersistentRef('topLeftText', '');
+// 右上角文本内容
 const topRightText = createPersistentRef('topRightText', '');
+// 左下角文本内容
 const bottomLeftText = createPersistentRef('bottomLeftText', '');
+// 右下角文本内容
 const bottomRightText = createPersistentRef('bottomRightText', '');
+// 发票标题
 const invoiceTitle = createPersistentRef('invoiceTitle', '');
+// 标题字体大小
 const titleFontSize = createPersistentRef('titleFontSize', 28);
+// 标题是否加粗
 const isTitleBold = createPersistentRef('isTitleBold', true);
+// 打印宽度缩放百分比
 const printScaleWidth = createPersistentRef('printScaleWidth', 100);
+// 打印高度缩放百分比
 const printScaleHeight = createPersistentRef('printScaleHeight', 100);
+// 是否保持宽高比
 const keepAspectRatio = createPersistentRef('keepAspectRatio', true);
+// 打印上边距
 const printMarginTop = createPersistentRef('printMarginTop', 0);
+// 打印左边距
 const printMarginLeft = createPersistentRef('printMarginLeft', 0);
+// 表格后空白行数
 const emptyRowsAfterTable = createPersistentRef('emptyRowsAfterTable', 0);
+// 是否合并最后一行
 const isLastRowMerged = createPersistentRef('isLastRowMerged', false);
+// 合并行文本内容
 const mergedRowText = createPersistentRef('mergedRowText', '');
+// 计算公式配置
 const calculationFormulas = createPersistentRef('calculationFormulas', '');
+// 表格内容居中
 const isTableDataCentered = createPersistentRef('isTableDataCentered', false);
+// 合并格内容居中
 const isMergedCellCentered = createPersistentRef('isMergedCellCentered', false);
+// 计算结果存储
 const calculationResults = ref({});
 
+// --- 计算属性 ---
 
-
+// 根据 selectedFieldIds 计算出实际要显示的字段对象，并保持选择顺序
 const displayedFields = computed(() => {
-  if (!selectedFieldIds.value.length || !allFields.value.length) {
-    return [];
-  }
-  return selectedFieldIds.value.map(id => {
-    return allFields.value.find(field => field.id === id);
-  }).filter(Boolean);
+  if (!allFields.value.length) return [];
+  return selectedFieldIds.value.map(id => allFields.value.find(f => f.id === id)).filter(Boolean);
 });
 
+const columnWidthStyles = computed(() => {
+  if (!columnWidths.value || displayedFields.value.length === 0) {
+    return displayedFields.value.map(() => ({}));
+  }
+
+  const widths = columnWidths.value.split(',').map(w => parseFloat(w.trim()) || 0);
+  const totalProportion = widths.reduce((sum, w) => sum + w, 0);
+
+  if (totalProportion === 0) {
+    return displayedFields.value.map(() => ({}));
+  }
+
+  return displayedFields.value.map((field, index) => {
+    const width = widths[index];
+    if (width > 0) {
+      const percentage = (width / totalProportion) * 100;
+      return { width: `${percentage}%` };
+    } else {
+      return {}; // '0' or invalid numbers result in dynamic width
+    }
+  });
+});
 
 const titleStyle = computed(() => ({
   fontSize: `${titleFontSize.value}px`,
   fontWeight: isTitleBold.value ? 'bold' : 'normal',
 }));
 
+// --- 计算文本内容 ---
 
-
+/**
+ * 获取客户文本内容
+ * @param {Object} customerData - 客户数据
+ * @returns {Object} 包含四个角落文本的对象
+ */
 function getCustomerText(customerData) {
   const result = {
     topLeft: replaceVariables(topLeftText.value, customerData, calculationResults.value, allFields.value, groupingFieldIds.value),
@@ -557,7 +697,7 @@ function getCustomerText(customerData) {
   return result;
 }
 
-
+// 左上角文本计算属性
 const computedTopLeftText = computed(() => {
   if (invoiceDataByCustomer.value.length === 0 || currentCustomerIndex.value >= invoiceDataByCustomer.value.length) {
     return topLeftText.value;
@@ -565,7 +705,7 @@ const computedTopLeftText = computed(() => {
   return replaceVariables(topLeftText.value, invoiceDataByCustomer.value[currentCustomerIndex.value], calculationResults.value, allFields.value, groupingFieldIds.value);
 });
 
-
+// 右上角文本计算属性
 const computedTopRightText = computed(() => {
   if (invoiceDataByCustomer.value.length === 0 || currentCustomerIndex.value >= invoiceDataByCustomer.value.length) {
     return topRightText.value;
@@ -573,7 +713,7 @@ const computedTopRightText = computed(() => {
   return replaceVariables(topRightText.value, invoiceDataByCustomer.value[currentCustomerIndex.value], calculationResults.value, allFields.value, groupingFieldIds.value);
 });
 
-
+// 左下角文本计算属性
 const computedBottomLeftText = computed(() => {
   if (invoiceDataByCustomer.value.length === 0 || currentCustomerIndex.value >= invoiceDataByCustomer.value.length) {
     return bottomLeftText.value;
@@ -581,7 +721,7 @@ const computedBottomLeftText = computed(() => {
   return replaceVariables(bottomLeftText.value, invoiceDataByCustomer.value[currentCustomerIndex.value], calculationResults.value, allFields.value, groupingFieldIds.value);
 });
 
-
+// 右下角文本计算属性
 const computedBottomRightText = computed(() => {
   if (invoiceDataByCustomer.value.length === 0 || currentCustomerIndex.value >= invoiceDataByCustomer.value.length) {
     return bottomRightText.value;
@@ -589,17 +729,22 @@ const computedBottomRightText = computed(() => {
   return replaceVariables(bottomRightText.value, invoiceDataByCustomer.value[currentCustomerIndex.value], calculationResults.value, allFields.value, groupingFieldIds.value);
 });
 
-
+// 合并行文本计算属性
 const computedMergedRowText = computed(() => {
   if (invoiceDataByCustomer.value.length === 0 || currentCustomerIndex.value >= invoiceDataByCustomer.value.length) {
     return mergedRowText.value || '&nbsp;';
   }
+  // 如果配置了合并行文本，则使用配置的文本，否则使用默认的空白字符
   const textToProcess = mergedRowText.value || '&nbsp;';
   return replaceVariables(textToProcess, invoiceDataByCustomer.value[currentCustomerIndex.value], calculationResults.value, allFields.value, groupingFieldIds.value);
 });
 
+// --- 计算逻辑处理 ---
 
-
+/**
+ * 处理计算逻辑
+ * @param {Object} customerData - 客户数据
+ */
 function processCalculations(customerData) {
   if (!calculationFormulas.value || !customerData || !customerData.records.length) {
     calculationResults.value = {};
@@ -610,6 +755,7 @@ function processCalculations(customerData) {
   const formulas = calculationFormulas.value.split(';').map(f => f.trim()).filter(f => f);
 
   formulas.forEach(formula => {
+    // 解析公式定义
     const match = formula.match(/^([^=()]+(?:\([^)]+\))?)\s*=\s*(.+)$/);
     if (!match) {
       console.error('公式格式错误:', formula);
@@ -619,15 +765,18 @@ function processCalculations(customerData) {
     const varDef = match[1].trim();
     const expression = match[2].trim();
 
+    // 解析变量名和格式设置
     let varName = varDef;
     let formatConfig = null;
 
+    // 检查是否有格式设置
     const formatMatch = varDef.match(/^([^(]+)\(([^)]+)\)$/);
     if (formatMatch) {
       varName = formatMatch[1].trim();
       formatConfig = formatMatch[2].trim();
     }
 
+    // 处理特殊聚合操作：字段名+
     if (expression.endsWith('+') && !expression.includes('+ ')) {
       const fieldName = expression.slice(0, -1).trim();
       const field = allFields.value.find(f => f.name === fieldName);
@@ -637,6 +786,7 @@ function processCalculations(customerData) {
           const value = parseFloat(formatCell(record[field.id])) || 0;
           sum += value;
         });
+        // 存储格式配置和结果
         results[varName] = {
           values: [sum],
           formatConfig: formatConfig
@@ -645,6 +795,7 @@ function processCalculations(customerData) {
       return;
     }
 
+    // 处理特殊聚合操作：字段名*
     if (expression.endsWith('*') && !expression.includes('* ')) {
       const fieldName = expression.slice(0, -1).trim();
       const field = allFields.value.find(f => f.name === fieldName);
@@ -654,6 +805,7 @@ function processCalculations(customerData) {
           const value = parseFloat(formatCell(record[field.id])) || 1;
           product *= value;
         });
+        // 存储格式配置和结果
         results[varName] = {
           values: [product],
           formatConfig: formatConfig
@@ -662,14 +814,19 @@ function processCalculations(customerData) {
       return;
     }
 
+    // 处理普通表达式：对每一行数据进行计算
     const rowResults = [];
 
+    // 遍历每条记录，为每条记录计算一次表达式
     customerData.records.forEach((record, index) => {
       try {
+        // 创建字段值映射对象
         const fieldValues = {};
 
+        // 先检查表达式中包含哪些字段名
         const expressionFields = [];
         allFields.value.forEach(field => {
+          // 使用更宽松的匹配方式，支持中文字段名
           const escapedFieldName = field.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const fieldRegex = new RegExp(`(?:^|\\s|[\\(\\)+\\-*/])${escapedFieldName}(?:$|\\s|[\\(\\)+\\-*/])`, 'g');
           if (fieldRegex.test(' ' + expression + ' ')) {
@@ -677,10 +834,13 @@ function processCalculations(customerData) {
           }
         });
 
+        // 遍历表达式中包含的字段，获取当前记录的字段值
         expressionFields.forEach(field => {
           try {
+            // 确保字段ID在记录中存在
             if (record && record[field.id] !== undefined) {
               const rawValue = formatCell(record[field.id]);
+              // 直接尝试将原始值转换为数字
               const numValue = parseFloat(rawValue);
               fieldValues[field.name] = isNaN(numValue) ? 0 : numValue;
             } else {
@@ -692,30 +852,38 @@ function processCalculations(customerData) {
           }
         });
 
+        // 深拷贝表达式，避免修改原始字符串
         let evaluatedExpression = expression;
 
+        // 按字段名长度降序排序，确保较长的字段名先被替换
         const sortedFieldNames = Object.keys(fieldValues).sort((a, b) => b.length - a.length);
 
+        // 替换表达式中的字段名为实际值，使用更精确的替换方式
         sortedFieldNames.forEach(fieldName => {
           if (fieldValues[fieldName] !== undefined) {
+            // 使用单词边界匹配的正则表达式，确保只替换完整的字段名
             const escapedFieldName = fieldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const regex = new RegExp(`(^|\\s|[\\(\\)+\\-*/])${escapedFieldName}($|\\s|[\\(\\)+\\-*/])`, 'g');
             evaluatedExpression = evaluatedExpression.replace(regex, `$1${fieldValues[fieldName]}$2`);
           }
         });
 
+        // 使用支持运算符优先级的表达式计算器
         const result = evaluateExpression(evaluatedExpression);
 
+        // 确保结果是数字类型
         const finalResult = Number(result);
         const cleanResult = isNaN(finalResult) ? 0 : finalResult;
 
         rowResults.push(cleanResult);
       } catch (error) {
         console.error(`记录${index}计算${varName}出错:`, error);
+        // 出错时添加0
         rowResults.push(0);
       }
     });
 
+    // 存储格式配置和结果
     results[varName] = {
       values: rowResults,
       formatConfig: formatConfig
@@ -725,15 +893,22 @@ function processCalculations(customerData) {
   calculationResults.value = results;
 }
 
-
+/**
+ * 支持运算符优先级的表达式计算器
+ * @param {string} expression - 数学表达式字符串
+ * @returns {number} 计算结果
+ */
 function evaluateExpression(expression) {
+  // 移除所有空格
   expression = expression.replace(/\s+/g, '');
 
+  // 验证表达式只包含数字、运算符、小数点和括号
   if (!/^[\d+\-*/().]+$/.test(expression)) {
     throw new Error('表达式包含非法字符');
   }
 
   try {
+    // 使用调度场算法处理运算符优先级
     return shuntingYardEvaluate(expression);
   } catch (error) {
     console.error('表达式计算错误:', error);
@@ -741,17 +916,22 @@ function evaluateExpression(expression) {
   }
 }
 
-
+/**
+ * 获取统一的打印样式
+ * @returns {string} CSS样式字符串
+ */
 const getPrintStyles = () => {
   const scaleWidth = printScaleWidth.value / 100;
   const scaleHeight = printScaleHeight.value / 100;
 
   const transforms = [];
 
+  // 仅在边距不为0时应用位移
   if (printMarginLeft.value !== 0 || printMarginTop.value !== 0) {
     transforms.push(`translate(${printMarginLeft.value}px, ${printMarginTop.value}px)`);
   }
 
+  // 仅在缩放不为100%时应用缩放
   if (printScaleWidth.value !== 100 || printScaleHeight.value !== 100) {
     transforms.push(`scale(${scaleWidth}, ${scaleHeight})`);
   }
@@ -828,17 +1008,23 @@ const getPrintStyles = () => {
   return styles;
 };
 
+// --- 生命周期钩子 ---
 
-
+/**
+ * 组件加载时获取字段列表，用于填充多选框
+ */
 onMounted(async () => {
   try {
     const table = await bitable.base.getActiveTable();
     const fieldMetaList = await table.getFieldMetaList();
 
+    // 加载所有字段，用于选择显示列和合并依据
     allFields.value = fieldMetaList;
 
+    // 设置定时器，每100毫秒检查一次选择变化
     setInterval(loadData, 100);
 
+    // 加载初始数据
     await loadData();
 
   } catch (error) {
@@ -846,9 +1032,9 @@ onMounted(async () => {
   }
 });
 
+// --- 监听器 ---
 
-
-
+// 监听输入变化并保存到 localStorage
 watch([topLeftText, topRightText, bottomLeftText, bottomRightText, invoiceTitle, titleFontSize, isTitleBold],
   ([newTopLeft, newTopRight, newBottomLeft, newBottomRight, newTitle, newFontSize, newIsBold]) => {
     localStorage.setItem('topLeftText', newTopLeft);
@@ -861,17 +1047,17 @@ watch([topLeftText, topRightText, bottomLeftText, bottomRightText, invoiceTitle,
   }
 );
 
-
+// 缩放比例同步更新标志
 let isUpdatingScale = false;
 
-
+// 监听等比缩放选项变化
 watch(keepAspectRatio, (newValue) => {
   if (newValue) {
     printScaleHeight.value = printScaleWidth.value;
   }
 });
 
-
+// 监听宽度缩放变化
 watch(printScaleWidth, (newValue) => {
   if (keepAspectRatio.value && !isUpdatingScale) {
     isUpdatingScale = true;
@@ -880,7 +1066,7 @@ watch(printScaleWidth, (newValue) => {
   }
 });
 
-
+// 监听高度缩放变化
 watch(printScaleHeight, (newValue) => {
   if (keepAspectRatio.value && !isUpdatingScale) {
     isUpdatingScale = true;
@@ -889,9 +1075,11 @@ watch(printScaleHeight, (newValue) => {
   }
 });
 
+// --- 主要功能函数 ---
 
-
-
+/**
+ * 加载并处理选中数据
+ */
 async function loadData() {
   const selection = await bitable.base.getSelection();
   if (!selection || !selection.tableId || !selection.viewId) {
@@ -907,8 +1095,9 @@ async function loadData() {
   const view = await table.getViewById(selection.viewId);
   const recordIdList = await view.getSelectedRecordIdList();
 
+  // 检查选中记录是否有变化
   if (JSON.stringify(recordIdList) === JSON.stringify(lastRecordIdList)) {
-    return;
+    return; // 没有变化则不重新生成
   }
 
   lastRecordIdList = recordIdList;
@@ -923,8 +1112,16 @@ async function loadData() {
   await generateInvoice(recordIdList, table);
 }
 
-
+/**
+ * 生成发票预览
+ */
 async function generateInvoice(recordIdList, table) {
+  // 移除了"请至少选择一个要显示的列！"的提示，允许用户不选择任何列
+  // if (selectedFieldIds.value.length === 0) {
+  //   alert('请至少选择一个要显示的列！');
+  //   return;
+  // }
+
   const fieldMetaList = await table.getFieldMetaList();
 
   let processedData = [];
@@ -978,13 +1175,16 @@ async function generateInvoice(recordIdList, table) {
   }
 
   currentCustomerIndex.value = 0;
+  // 生成发票后处理计算逻辑
   if (invoiceDataByCustomer.value.length > 0) {
     processCalculations(invoiceDataByCustomer.value[currentCustomerIndex.value]);
   }
   showInvoice.value = true;
 }
 
-
+/**
+ * 打印当前单据
+ */
 function printInvoice() {
   const iframe = document.createElement('iframe');
   iframe.style.position = 'absolute';
@@ -1005,6 +1205,7 @@ function printInvoice() {
   }
   const currentInvoiceHtml = printArea.innerHTML;
 
+  // 移除分页符，因为只打印一页
   const styles = getPrintStyles()
     .replace(/page-break-after: always;/g, '')
     .replace(/break-after: page;/g, '');
@@ -1034,8 +1235,11 @@ function printInvoice() {
   }, 500);
 }
 
-
+/**
+ * 打印全部单据 (iframe版本)
+ */
 function printAllInvoices() {
+  // 1. 创建一个隐藏的iframe
   const iframe = document.createElement('iframe');
   iframe.style.position = 'absolute';
   iframe.style.width = '0';
@@ -1047,8 +1251,10 @@ function printAllInvoices() {
 
   const doc = iframe.contentWindow.document;
 
+  // 2. 构建所有发票页面的HTML内容
   let allInvoicesHtml = '';
   invoiceDataByCustomer.value.forEach(customerData => {
+    // 为每个客户生成计算结果
     processCalculations(customerData);
 
     const topLeftHtml = getCustomerText(customerData).topLeft || '&nbsp;';
@@ -1060,20 +1266,24 @@ function printAllInvoices() {
     let recordsHtml = '';
     customerData.records.forEach(record => {
       recordsHtml += '<tr>';
-      displayedFields.value.forEach(field => {
-        recordsHtml += `<td>${formatCell(record[field.id])}</td>`;
+      displayedFields.value.forEach((field, index) => {
+        const style = columnWidthStyles.value[index] && columnWidthStyles.value[index].width ? `style="width: ${columnWidthStyles.value[index].width}"` : '';
+        recordsHtml += `<td ${style}>${formatCell(record[field.id])}</td>`;
       });
       recordsHtml += '</tr>';
     });
 
+    // 添加空白行
     for (let i = 0; i < emptyRowsAfterTable.value; i++) {
       recordsHtml += '<tr>';
-      displayedFields.value.forEach(() => {
-        recordsHtml += '<td>&nbsp;</td>';
+      displayedFields.value.forEach((field, index) => {
+        const style = columnWidthStyles.value[index] && columnWidthStyles.value[index].width ? `style="width: ${columnWidthStyles.value[index].width}"` : '';
+        recordsHtml += `<td ${style}>&nbsp;</td>`;
       });
       recordsHtml += '</tr>';
     }
 
+    // 添加合并行
     if (isLastRowMerged.value) {
       recordsHtml += `
         <tr class="merged-row">
@@ -1090,10 +1300,13 @@ function printAllInvoices() {
             <div class="meta-info-top-left">${topLeftHtml}</div>
             <div class="meta-info-top-right">${topRightHtml}</div>
           </div>
-          <table class="invoice-table">
+      <table class="invoice-table">
             <thead>
               <tr>
-                ${displayedFields.value.map(field => `<th>${field.name}</th>`).join('')}
+                ${displayedFields.value.map((field, index) => {
+      const style = columnWidthStyles.value[index] && columnWidthStyles.value[index].width ? `style="width: ${columnWidthStyles.value[index].width}"` : '';
+      return `<th ${style}>${field.name}</th>`;
+    }).join('')}
               </tr>
             </thead>
             <tbody>
@@ -1109,6 +1322,7 @@ function printAllInvoices() {
     `;
   });
 
+  // 3. 注入HTML和样式到iframe
   doc.open();
   doc.write(`
     <html>
@@ -1125,25 +1339,32 @@ function printAllInvoices() {
   `);
   doc.close();
 
+  // 4. 执行打印并清理
   iframe.contentWindow.focus();
   setTimeout(() => {
     iframe.contentWindow.print();
     document.body.removeChild(iframe);
-  }, 500);
+  }, 500); // 等待iframe内容渲染
 }
 
-
+/**
+ * 切换到上一个客户
+ */
 function prevCustomer() {
   if (currentCustomerIndex.value > 0) {
     currentCustomerIndex.value--;
+    // 切换客户后重新处理计算逻辑
     processCalculations(invoiceDataByCustomer.value[currentCustomerIndex.value]);
   }
 }
 
-
+/**
+ * 切换到下一个客户
+ */
 function nextCustomer() {
   if (currentCustomerIndex.value < invoiceDataByCustomer.value.length - 1) {
     currentCustomerIndex.value++;
+    // 切换客户后重新处理计算逻辑
     processCalculations(invoiceDataByCustomer.value[currentCustomerIndex.value]);
   }
 }
@@ -1151,12 +1372,12 @@ function nextCustomer() {
 
 <template>
   <div class="container">
-    
+    <!-- 设置按钮 -->
     <div class="settings-bar">
       <el-button :icon="Setting" circle @click="showSettingsDialog = true"></el-button>
     </div>
 
-    
+    <!-- 嵌入式打印预览 -->
     <div v-if="showInvoice" class="embedded-preview">
       <div class="invoice-wrapper">
         <div id="invoice-print-area">
@@ -1168,21 +1389,23 @@ function nextCustomer() {
           <table class="invoice-table">
             <thead>
               <tr>
-                <th v-for="field in displayedFields" :key="field.id">{{ field.name }}</th>
+                <th v-for="(field, index) in displayedFields" :key="field.id" :style="columnWidthStyles[index]">{{
+                  field.name }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="(record, idx) in invoiceDataByCustomer[currentCustomerIndex].records" :key="idx">
-                <td v-for="field in displayedFields" :key="field.id"
-                  :style="{ textAlign: isTableDataCentered ? 'center' : 'left' }">
+                <td v-for="(field, index) in displayedFields" :key="field.id"
+                  :style="[{ textAlign: isTableDataCentered ? 'center' : 'left' }, columnWidthStyles[index]]">
                   {{ formatCell(record[field.id]) }}
                 </td>
               </tr>
-              
+              <!-- 表格下方空白行 -->
               <tr v-for="rowIndex in emptyRowsAfterTable" :key="'empty-' + rowIndex">
-                <td v-for="field in displayedFields" :key="field.id">&nbsp;</td>
+                <td v-for="(field, index) in displayedFields" :key="field.id" :style="columnWidthStyles[index]">&nbsp;
+                </td>
               </tr>
-              
+              <!-- 根据设置决定是否添加合并的最后一行 -->
               <tr v-if="isLastRowMerged" :key="'merged-last'" class="merged-row">
                 <td :colspan="displayedFields.length" v-html="computedMergedRowText"
                   :style="{ textAlign: isMergedCellCentered ? 'center' : 'left' }"></td>
@@ -1208,7 +1431,7 @@ function nextCustomer() {
       <p>请在表格中选择需要打印的数据行</p>
     </div>
 
-    
+    <!-- 设置对话框 -->
     <el-dialog v-model="showSettingsDialog" title="打印设置" width="80%">
       <div style="width: 80%;">
         <el-form label-width="120px">
@@ -1231,6 +1454,9 @@ function nextCustomer() {
               </el-option>
             </el-select>
           </el-form-item>
+          <el-form-item label="显示列列宽">
+            <el-input v-model="columnWidths" placeholder="用逗号分隔,如 7,6,5。0表示动态宽度"></el-input>
+          </el-form-item>
           <el-form-item label="合并依据">
             <el-select v-model="groupingFieldIds" multiple placeholder="请选择用于合并单据的列" style="width: 100%;">
               <el-option v-for="field in allFields" :key="field.id" :label="field.name" :value="field.id">
@@ -1238,51 +1464,51 @@ function nextCustomer() {
             </el-select>
           </el-form-item>
 
-          
+          <!-- 左上角文本 -->
           <el-form-item label="左上角文本">
             <div style="display: flex; flex-direction: column; width: 100%;">
               <div style="flex-grow: 1;">
                 <el-input v-model="topLeftText" type="textarea" :rows="2"
-                  placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额">
+                  placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额，>内容> 表示内容靠右展示，>内容> 表示内容靠右展示">
                 </el-input>
               </div>
             </div>
           </el-form-item>
 
-          
+          <!-- 右上角文本 -->
           <el-form-item label="右上角文本">
             <div style="display: flex; flex-direction: column; width: 100%;">
               <div style="flex-grow: 1;">
                 <el-input v-model="topRightText" type="textarea" :rows="2"
-                  placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额">
+                  placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额，>内容> 表示内容靠右展示">
                 </el-input>
               </div>
             </div>
           </el-form-item>
 
-          
+          <!-- 左下角文本 -->
           <el-form-item label="左下角文本">
             <div style="display: flex; flex-direction: column; width: 100%;">
               <div style="flex-grow: 1;">
                 <el-input v-model="bottomLeftText" type="textarea" :rows="2"
-                  placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额">
+                  placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额，>内容> 表示内容靠右展示">
                 </el-input>
               </div>
             </div>
           </el-form-item>
 
-          
+          <!-- 右下角文本 -->
           <el-form-item label="右下角文本">
             <div style="display: flex; flex-direction: column; width: 100%;">
               <div style="flex-grow: 1;">
                 <el-input v-model="bottomRightText" type="textarea" :rows="2"
-                  placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额">
+                  placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额，>内容> 表示内容靠右展示">
                 </el-input>
               </div>
             </div>
           </el-form-item>
 
-          
+          <!-- 计算逻辑配置 -->
           <el-form-item label="计算逻辑配置">
             <el-input v-model="calculationFormulas" type="textarea" :rows="3"
               placeholder="格式：变量名(保留位数保留规则) = 表达式 //保留规则为不填/舍/入，不填为四舍五入;  示例：AAA = 斤数*单价 - 成本；  BBB(2舍) = 金额+ // 金额列求；  CCC = 金额* // 金额列求积；  使用方式：{{AAA[1]}}、{{BBB}}"></el-input>
@@ -1340,12 +1566,12 @@ function nextCustomer() {
               </div>
             </el-form-item>
 
-            
+            <!-- 合并行文本配置项 -->
             <el-form-item label="合并行文本" v-show="isLastRowMerged">
               <div style="display: flex; flex-direction: column; width: 100%;">
                 <div style="flex-grow: 1;">
                   <el-input v-model="mergedRowText" type="textarea" :rows="2"
-                    placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额"></el-input>
+                    placeholder="支持使用{{字段名}}引用表格数据，\n表示换行（可*n叠加），\t表示空格（可*n叠加），@数值@ 表示金额转换为中文大写金额，>内容> 表示内容靠右展示"></el-input>
                 </div>
               </div>
             </el-form-item>
@@ -1417,6 +1643,7 @@ function nextCustomer() {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
+  table-layout: fixed;
 }
 
 .invoice-table th,
